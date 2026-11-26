@@ -1,0 +1,36 @@
+services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_DB: dispatcher
+      POSTGRES_USER: dispatcher
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD before starting Docker Compose}
+    ports:
+      - "127.0.0.1:${DISPATCHER_DB_PORT:-5432}:5432"
+    volumes:
+      - dispatcher_db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U dispatcher -d dispatcher"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+  scheduler:
+    build: .
+    user: "${DISPATCHER_UID:-0}:${DISPATCHER_GID:-0}"
+    environment:
+      POSTGRES_HOST: db
+      POSTGRES_DB: dispatcher
+      POSTGRES_USER: dispatcher
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD before starting Docker Compose}
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - ./examples:/input:ro
+      - ./output:/output
+    command: ["/input/example.xlsx", "/output/schedule.xlsx"]
+    profiles: ["scheduler"]
+
+volumes:
+  dispatcher_db:

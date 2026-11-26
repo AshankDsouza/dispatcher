@@ -7,6 +7,19 @@ namespace Dispatcher.Tests;
 public class DispatcherTests
 {
     [Fact]
+    public void ExampleWorkbookProducesExpectedSchedule()
+    {
+        var intake = Workbooks.Read(Path.Combine(AppContext.BaseDirectory, "example.xlsx"));
+        var assignments = Scheduler.Schedule(intake);
+
+        Assert.Equal(new[] { "T001", "T002", "T003", "T004" }, assignments.Select(a => a.Job.Id));
+        Assert.Equal(new[] { "E001" }, assignments[0].Crew.Select(e => e.Id));
+        Assert.Empty(assignments[1].Crew);
+        Assert.Equal(new[] { "E003" }, assignments[2].Crew.Select(e => e.Id));
+        Assert.Equal(new[] { "E001", "E002" }, assignments[3].Crew.Select(e => e.Id));
+    }
+
+    [Fact]
     public void SchedulerRanksExperienceAvoidsOverlapsAndLeavesIncompleteCrewsUnassigned()
     {
         var start = new DateTime(2026, 1, 1, 9, 0, 0);

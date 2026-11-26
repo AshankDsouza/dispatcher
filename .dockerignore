@@ -1,0 +1,5 @@
+*
+!Dispatcher.Core/
+!Dispatcher.Cli/
+**/bin/
+**/obj/

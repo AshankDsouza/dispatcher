@@ -24,4 +24,8 @@
     <ProjectReference Include="..\Dispatcher.Core\Dispatcher.Core.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <None Include="..\examples\example.xlsx" Link="example.xlsx" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
 </Project>
