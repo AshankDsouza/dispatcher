@@ -55,8 +55,8 @@ public class DispatcherTests
                     tasks.Cell(row, 2).Value = "C1";
                     tasks.Cell(row, 3).Value = "Repair";
                     tasks.Cell(row, 4).Value = "Plumbing";
-                    tasks.Cell(row, 5).Value = "2026-01-01 09:00";
-                    tasks.Cell(row, 6).Value = new DateTime(2026, 1, 1, 10, 0, 0);
+                    tasks.Cell(row, 5).Value = "2026-01-01 09:00:10";
+                    tasks.Cell(row, 6).Value = new DateTime(2026, 1, 1, 10, 0, 20);
                     tasks.Cell(row, 7).Value = 1;
                 }
                 workbook.Save();
@@ -68,6 +68,8 @@ public class DispatcherTests
             Assert.Equal("Scheduled", exported.Worksheet("Schedule").Cell("I2").GetString());
             Assert.Equal("E1", exported.Worksheet("Schedule").Cell("J2").GetString());
             Assert.Equal("Unscheduled", exported.Worksheet("Schedule").Cell("I3").GetString());
+            Assert.Equal(10, exported.Worksheet("Schedule").Cell("F2").GetDateTime().Second);
+            Assert.Contains("ss", exported.Worksheet("Schedule").Cell("F2").Style.DateFormat.Format);
 
             using (var workbook = new XLWorkbook(input))
             {

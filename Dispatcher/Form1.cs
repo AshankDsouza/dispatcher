@@ -71,7 +71,10 @@ public partial class Form1 : Form
             MessageBox.Show(this, "Select an input and output workbook and enter a PostgreSQL connection string.");
             return;
         }
-        if (string.Equals(Path.GetFullPath(input.Text), Path.GetFullPath(output.Text), StringComparison.OrdinalIgnoreCase))
+        var inputPath = input.Text;
+        var outputPath = output.Text;
+        var connectionString = connection.Text;
+        if (string.Equals(Path.GetFullPath(inputPath), Path.GetFullPath(outputPath), StringComparison.OrdinalIgnoreCase))
         {
             MessageBox.Show(this, "The output workbook must be different from the input workbook.");
             return;
@@ -80,10 +83,10 @@ public partial class Form1 : Form
         try
         {
             status.Text = "Processing...";
-            var intake = Workbooks.Read(input.Text);
+            var intake = Workbooks.Read(inputPath);
             var assignments = Scheduler.Schedule(intake);
-            await Database.SaveAsync(connection.Text, intake, assignments);
-            Workbooks.WriteSchedule(output.Text, intake, assignments);
+            await Database.SaveAsync(connectionString, intake, assignments);
+            Workbooks.WriteSchedule(outputPath, intake, assignments);
             status.Text = $"Finished: {assignments.Count(a => a.Crew.Count > 0)} scheduled, " +
                 $"{assignments.Count(a => a.Crew.Count == 0)} unscheduled.";
         }

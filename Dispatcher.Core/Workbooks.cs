@@ -100,19 +100,19 @@ public static class Workbooks
             row.Cell(10).Value = string.Join(", ", crew.Select(e => e.Id));
             row.Cell(11).Value = string.Join(", ", crew.Select(e => e.Name));
         }
-        sheet.Columns(6, 7).Style.DateFormat.Format = "yyyy-mm-dd hh:mm";
+        sheet.Columns(6, 7).Style.DateFormat.Format = "yyyy-mm-dd hh:mm:ss.000";
         workbook.SaveAs(path);
     }
 
     private static IEnumerable<IXLRow> Rows(XLWorkbook workbook, string name, int columns)
     {
         var sheet = workbook.Worksheet(name);
-        var last = sheet.LastRowUsed()?.RowNumber() ?? 1;
-        for (var number = 2; number <= last; number++)
+        var rows = sheet.CellsUsed(XLCellsUsedOptions.Contents)
+            .Where(cell => cell.Address.RowNumber > 1 && cell.Address.ColumnNumber <= columns)
+            .Select(cell => cell.Address.RowNumber).Distinct().Order();
+        foreach (var number in rows)
         {
             var row = sheet.Row(number);
-            if (Enumerable.Range(1, columns).All(i => row.Cell(i).IsEmpty()))
-                continue;
             yield return row;
         }
     }
