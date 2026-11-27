@@ -16,18 +16,6 @@ services:
       timeout: 3s
       retries: 20
 
-  web:
-    build:
-      context: .
-      dockerfile: Dispatcher.Web/Dockerfile
-    environment:
-      DISPATCHER_CONNECTION_STRING: Host=db;Database=dispatcher;Username=dispatcher
-    ports:
-      - "127.0.0.1:${DISPATCHER_WEB_PORT:-5080}:8080"
-    depends_on:
-      db:
-        condition: service_healthy
-
   scheduler:
     build: .
     user: "${DISPATCHER_UID:-0}:${DISPATCHER_GID:-0}"
