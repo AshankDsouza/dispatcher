@@ -1,75 +1,89 @@
 # Dispatcher
 
-A Windows Forms application for importing an Excel staffing snapshot into PostgreSQL,
-assigning crews without AI, and exporting a schedule as an `.xlsx` file.
+A small web application for importing an Excel staffing snapshot into PostgreSQL,
+assigning crews without AI, and exporting a schedule as an `.xlsx` file. It runs
+on macOS, Linux and Windows.
+
+> **Local development only:** the Compose PostgreSQL uses `trust` authentication
+> (no password) and listens only on `127.0.0.1`. Do not expose it to a network.
 
 ## Run with Docker
 
-Install Docker Desktop (or Docker Engine with Compose) and use Linux containers.
-The Docker scheduler is a command-line version of the same scheduling engine;
-it does not run the Windows Forms UI. From the repository directory, set a
-local PostgreSQL password and run the included example:
+Install Docker Desktop (or Docker Engine with Compose). From the repository directory:
 
-```powershell
-$env:POSTGRES_PASSWORD = Read-Host "Choose a local PostgreSQL password"
-New-Item -ItemType Directory -Force output
+```sh
+docker compose up -d --build web
+```
+
+Open <http://localhost:5080>. Compose starts PostgreSQL first and waits for it to
+be ready. Set `DISPATCHER_WEB_PORT` or `DISPATCHER_DB_PORT` to change the host ports.
+PostgreSQL persists in the `dispatcher_db` Docker volume. Run `docker compose down`
+to stop everything; `docker compose down -v` **deletes its data**. Authentication
+is chosen when the volume is first created, so delete the volume if you later
+switch to password authentication.
+
+### Command-line scheduler
+
+The same engine is available as a CLI container that processes the included example:
+
+```sh
+mkdir -p output
 docker compose run --build --rm scheduler
 ```
 
-In a POSIX shell, use `read -rs POSTGRES_PASSWORD; export POSTGRES_PASSWORD`
-and `mkdir -p output` before the `docker compose run` command instead. On Linux,
-also set `export DISPATCHER_UID=$(id -u) DISPATCHER_GID=$(id -g)` so output files
-belong to your user; otherwise the scheduler container runs as root. Compose
-starts PostgreSQL and waits for it to be ready. Open `output/schedule.xlsx` to
-see the results. The included `examples/example.xlsx` has four jobs: T001 is
-assigned to E001, T002 is unscheduled due to overlap, T003 is assigned to E003,
-and T004 is assigned to E001 and E002 when they are both available.
-
+Open `output/schedule.xlsx` to see the results. The included `examples/example.xlsx`
+has four jobs: T001 is assigned to E001, T002 is unscheduled due to overlap, T003 is
+assigned to E003, and T004 is assigned to E001 and E002 when they are both available.
 To try your own workbook, place it in `examples` and provide container paths:
 
-```powershell
+```sh
 docker compose run --rm scheduler /input/my-intake.xlsx /output/my-schedule.xlsx
 ```
 
-Input is mounted read-only and `output` is writable. Each run replaces the database
-snapshot; use only a test database and sample data until you are ready to import
-your own data. PostgreSQL persists in the `dispatcher_db` Docker volume. Run
-`docker compose down` to stop it; `docker compose down -v` **deletes its data**.
-The password is used when the database volume is first created. Changing it later
-requires changing the database password as well, or deleting the volume and starting
-over. Set `DISPATCHER_DB_PORT` to change the host port if 5432 is already in use.
-Keep the password in your environment, not in source control. This Compose setup is
-for local use, not a production deployment.
+On Linux, also set `export DISPATCHER_UID=$(id -u) DISPATCHER_GID=$(id -g)` so output
+files belong to your user.
 
-## Windows desktop setup
+## Desktop app (macOS and Windows)
 
-Install the .NET 8 SDK on Windows and create an empty PostgreSQL database. The database
-user must be able to create a schema and tables and read and write them. Run:
+`Dispatcher.Desktop` is a cross-platform desktop app built with
+[Avalonia](https://avaloniaui.net/). It runs on macOS and Windows from the same code and shows
+the resulting schedule in a table as well as saving `schedule.xlsx`.
 
-```powershell
-dotnet run --project Dispatcher/Dispatcher.csproj
+1. Install the .NET 8 SDK and start the database: `docker compose up -d db`.
+2. Open `Dispatcher.sln` in JetBrains Rider (install the *AvaloniaRider* plugin for the XAML
+   previewer), choose the **Dispatcher.Desktop** run configuration and press Run.
+   From a terminal: `dotnet run --project Dispatcher.Desktop`.
+3. Click **Browse…** next to *Input workbook* and pick `examples/mock_data.xlsx` (or click
+   **Save sample data…**), then click **Import and schedule**.
+
+The connection defaults to `Host=localhost;Database=dispatcher;Username=dispatcher`; edit it in
+the window or set `DISPATCHER_CONNECTION_STRING`.
+
+## Run without Docker for the app
+
+Install the .NET 8 SDK, start the database with `docker compose up -d db` (or use any
+PostgreSQL database whose user can create a schema and tables), then run:
+
+```sh
+dotnet run --project Dispatcher.Web
 ```
 
-Enter an Npgsql connection string in the application, for example
-`Host=localhost;Database=dispatcher;Username=dispatcher` (add a password if required).
-Alternatively, set `DISPATCHER_CONNECTION_STRING` before launching. The connection
-string is masked in the UI and is not saved by the application. Use appropriate
-PostgreSQL access controls and TLS for remote connections.
-To use the Compose database instead, set `POSTGRES_PASSWORD` as above, run
-`docker compose up -d db`, and connect the UI to `Host=localhost;Port=5432;
-Database=dispatcher;Username=dispatcher` with the chosen password (use the
-configured host port if changed). The desktop application still runs on Windows,
-outside the container.
+and open <http://localhost:5080>. The app connects to
+`Host=localhost;Database=dispatcher;Username=dispatcher` by default; set
+`DISPATCHER_CONNECTION_STRING` to use a different Npgsql connection string.
 
 ## Intake and scheduling
 
-Click **Create intake template**, fill in the sheets below, then select that file and
-a different output file and click **Import and schedule**. Use the exact sheet and
+Click **Download template**, fill in the sheets below, then choose that file and click
+**Import and schedule**; the schedule downloads as `schedule.xlsx`. Use the exact sheet and
 column names and order in the template. IDs and skills are case-sensitive; IDs must
 be unique within their sheet. All fields are required, blank rows are ignored, and
 formulas are not supported. Enter IDs as text to preserve leading zeroes.
-Alternatively, open `examples/example.xlsx` as a starting point or use it directly
-to try the application.
+To try the application without preparing data, click **Download sample data**: it
+contains 12 technicians with their skills and job history, 8 customers and 25 jobs
+during the coming work week (two jobs are deliberately overbooked and stay
+unscheduled). Upload it as-is or edit it. `examples/example.xlsx` is a smaller
+four-job example.
 
 | Sheet | Columns | Meaning |
 | --- | --- | --- |
@@ -95,14 +109,12 @@ update. The application creates and replaces data in the `dispatcher` schema
 (employees, skills, employee skills, customers, tasks, completed work and
 assignments) in a single transaction. Include all current data in each intake.
 An unsuccessful database transaction leaves the previous snapshot intact.
-Export occurs after the database commit; if writing the output fails, correct the
-output path and rerun the same intake to regenerate it. Do not edit the database
+Export occurs after the database commit; if the download fails, rerun the same
+intake to regenerate it. Do not edit the database
 tables concurrently with an import.
 
 ## Verification
 
 Run `dotnet test Dispatcher.Tests/Dispatcher.Tests.csproj`. PostgreSQL integration
 tests are skipped unless `DISPATCHER_TEST_DATABASE` is set to a connection string
-for a **disposable** database; they replace its `dispatcher` schema data. To build
-the Windows project from a non-Windows host, use
-`dotnet build Dispatcher/Dispatcher.csproj -p:EnableWindowsTargeting=true`.
+for a **disposable** database; they replace its `dispatcher` schema data.

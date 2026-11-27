@@ -14,17 +14,46 @@ public static class Workbooks
         ("CompletedWork", ["EmployeeId", "Skill"])
     ];
 
-    public static void CreateTemplate(string path)
+    public static void CreateTemplate(string path) =>
+        WriteIntake(path, new Intake([], [], [], [], []));
+
+    /// <summary>Writes an intake workbook in the format <see cref="Read"/> accepts.</summary>
+    public static void WriteIntake(string path, Intake intake)
     {
         using var workbook = new XLWorkbook();
+        var rows = new Dictionary<string, IEnumerable<XLCellValue[]>>
+        {
+            ["Employees"] = intake.Employees.Select(e => new XLCellValue[] { e.Id, e.Name }),
+            ["Skills"] = intake.Skills.Select(s => new XLCellValue[] { s.EmployeeId, s.Skill }),
+            ["Customers"] = intake.Customers.Select(c => new XLCellValue[] { c.Id, c.Name }),
+            ["Tasks"] = intake.Jobs.Select(j => new XLCellValue[]
+                { j.Id, j.CustomerId, j.Description, j.Skill, j.Start, j.End, j.CrewSize }),
+            ["CompletedWork"] = intake.CompletedWork.Select(w => new XLCellValue[] { w.EmployeeId, w.Skill }),
+        };
         foreach (var (name, headers) in Sheets)
         {
             var sheet = workbook.AddWorksheet(name);
             for (var i = 0; i < headers.Length; i++)
                 sheet.Cell(1, i + 1).Value = headers[i];
             sheet.Row(1).Style.Font.Bold = true;
+            var r = 2;
+            foreach (var values in rows[name])
+            {
+                for (var i = 0; i < values.Length; i++)
+                    sheet.Cell(r, i + 1).Value = values[i];
+                r++;
+            }
+            if (name == "Tasks")
+                sheet.Columns(5, 6).Style.DateFormat.Format = "yyyy-mm-dd hh:mm";
+            sheet.Columns(1, headers.Length).Width = 18;
+            if (name is "Employees" or "Customers")
+                sheet.Column(2).Width = 30;
+            if (name == "Tasks")
+                sheet.Column(3).Width = 40;
         }
         workbook.SaveAs(path);
+        workbook.Dispose();
+        XlsxCompat.Normalize(path);
     }
 
     public static Intake Read(string path)
@@ -102,6 +131,8 @@ public static class Workbooks
         }
         sheet.Columns(6, 7).Style.DateFormat.Format = "yyyy-mm-dd hh:mm:ss.000";
         workbook.SaveAs(path);
+        workbook.Dispose();
+        XlsxCompat.Normalize(path);
     }
 
     private static IEnumerable<IXLRow> Rows(XLWorkbook workbook, string name, int columns)

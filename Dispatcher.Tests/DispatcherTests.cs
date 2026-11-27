@@ -20,6 +20,32 @@ public class DispatcherTests
     }
 
     [Fact]
+    public void SampleDataRoundTripsThroughWorkbookAndSchedules()
+    {
+        var monday = SampleData.NextMonday(new DateTime(2026, 11, 26));
+        Assert.Equal(new DateTime(2026, 11, 30), monday);
+        var sample = SampleData.Create(monday);
+        var file = Path.Combine(Path.GetTempPath(), $"{Guid.NewGuid():N}.xlsx");
+        try
+        {
+            Workbooks.WriteIntake(file, sample);
+            var intake = Workbooks.Read(file);
+            Assert.Equal(sample.Employees, intake.Employees);
+            Assert.Equal(sample.Skills, intake.Skills);
+            Assert.Equal(sample.Customers, intake.Customers);
+            Assert.Equal(sample.Jobs, intake.Jobs);
+            Assert.Equal(sample.CompletedWork, intake.CompletedWork);
+
+            var assignments = Scheduler.Schedule(intake);
+            var unscheduled = assignments.Where(a => a.Crew.Count == 0).Select(a => a.Job.Description).ToList();
+            Assert.Contains("Tear-off and reroof east wing", unscheduled);
+            Assert.Contains("Thermostat replacement, all units", unscheduled);
+            Assert.True(assignments.Count(a => a.Crew.Count > 0) >= 20);
+        }
+        finally { File.Delete(file); }
+    }
+
+    [Fact]
     public void SchedulerRanksExperienceAvoidsOverlapsAndLeavesIncompleteCrewsUnassigned()
     {
         var start = new DateTime(2026, 1, 1, 9, 0, 0);

@@ -19,14 +19,12 @@ try
     if (string.IsNullOrWhiteSpace(connectionString))
     {
         var password = Environment.GetEnvironmentVariable("POSTGRES_PASSWORD");
-        if (string.IsNullOrEmpty(password))
-            throw new ArgumentException("Set DISPATCHER_CONNECTION_STRING or POSTGRES_PASSWORD.");
         connectionString = new NpgsqlConnectionStringBuilder
         {
             Host = Environment.GetEnvironmentVariable("POSTGRES_HOST") ?? "localhost",
             Database = Environment.GetEnvironmentVariable("POSTGRES_DB") ?? "dispatcher",
             Username = Environment.GetEnvironmentVariable("POSTGRES_USER") ?? "dispatcher",
-            Password = password
+            Password = string.IsNullOrEmpty(password) ? null : password
         }.ConnectionString;
     }
 

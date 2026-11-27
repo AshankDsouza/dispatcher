@@ -1,0 +1,46 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="Dispatcher.Desktop.MainWindow"
+        Title="Dispatcher"
+        Width="1100" Height="720" MinWidth="760" MinHeight="480">
+  <Grid Classes="form" RowDefinitions="Auto,Auto,Auto,*" Margin="12">
+    <Grid.Styles>
+      <!-- Uniform spacing between every control in the window -->
+      <Style Selector="Grid.form > :is(Control)">
+        <Setter Property="Margin" Value="4" />
+      </Style>
+    </Grid.Styles>
+
+    <!-- Inputs -->
+    <Grid Grid.Row="0" Classes="form" ColumnDefinitions="Auto,*,Auto" RowDefinitions="Auto,Auto,Auto"
+          Margin="0">
+      <TextBlock Grid.Row="0" Grid.Column="0" Text="PostgreSQL connection" VerticalAlignment="Center" />
+      <TextBox   Grid.Row="0" Grid.Column="1" x:Name="ConnectionBox" />
+
+      <TextBlock Grid.Row="1" Grid.Column="0" Text="Input workbook" VerticalAlignment="Center" />
+      <TextBox   Grid.Row="1" Grid.Column="1" x:Name="InputBox" IsReadOnly="True"
+                 Watermark="Choose an intake .xlsx (e.g. examples/mock_data.xlsx)" />
+      <Button    Grid.Row="1" Grid.Column="2" Content="Browse…" Click="OnBrowseInput" />
+
+      <TextBlock Grid.Row="2" Grid.Column="0" Text="Output workbook" VerticalAlignment="Center" />
+      <TextBox   Grid.Row="2" Grid.Column="1" x:Name="OutputBox" IsReadOnly="True"
+                 Watermark="Where to save schedule.xlsx" />
+      <Button    Grid.Row="2" Grid.Column="2" Content="Browse…" Click="OnBrowseOutput" />
+    </Grid>
+
+    <!-- Actions -->
+    <StackPanel Grid.Row="1" Orientation="Horizontal" Spacing="8" Margin="4,8">
+      <Button Content="Create intake template…" Click="OnCreateTemplate" />
+      <Button Content="Save sample data…" Click="OnSaveSample" />
+      <Button x:Name="RunButton" Content="Import and schedule" Classes="accent" Click="OnRun" />
+    </StackPanel>
+
+    <TextBlock Grid.Row="2" x:Name="StatusText" TextWrapping="Wrap"
+               Text="Choose an intake workbook, then click Import and schedule." />
+
+    <!-- Results -->
+    <DataGrid Grid.Row="3" x:Name="ResultsGrid" IsReadOnly="True" AutoGenerateColumns="True"
+              GridLinesVisibility="Horizontal" BorderThickness="1"
+              BorderBrush="{DynamicResource SystemControlForegroundBaseLowBrush}" />
+  </Grid>
+</Window>
