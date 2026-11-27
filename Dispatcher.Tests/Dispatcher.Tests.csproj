@@ -25,7 +25,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <None Include="..\examples\example.xlsx" Link="example.xlsx" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\examples\mock_data.xlsx" Link="mock_data.xlsx" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
 </Project>

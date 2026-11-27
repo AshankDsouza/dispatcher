@@ -7,15 +7,16 @@ public static class Workbooks
 {
     private static readonly (string Name, string[] Headers)[] Sheets =
     [
-        ("Employees", ["Id", "Name"]),
+        ("Employees", ["Id", "Name", "Rating", "CompletionPercent"]),
         ("Skills", ["EmployeeId", "Skill"]),
         ("Customers", ["Id", "Name"]),
-        ("Tasks", ["Id", "CustomerId", "Description", "Skill", "Start", "End", "CrewSize"]),
-        ("CompletedWork", ["EmployeeId", "Skill"])
+        ("Tasks", ["Id", "CustomerId", "Description", "Skill", "Start", "End", "CrewSize", "Priority"]),
+        ("CompletedWork", ["EmployeeId", "Skill"]),
+        ("Scheduled", ["TaskId", "EmployeeId", "ScheduledStart", "ScheduledEnd"])
     ];
 
     public static void CreateTemplate(string path) =>
-        WriteIntake(path, new Intake([], [], [], [], []));
+        WriteIntake(path, new Intake([], [], [], [], [], []));
 
     /// <summary>Writes an intake workbook in the format <see cref="Read"/> accepts.</summary>
     public static void WriteIntake(string path, Intake intake)
@@ -23,12 +24,14 @@ public static class Workbooks
         using var workbook = new XLWorkbook();
         var rows = new Dictionary<string, IEnumerable<XLCellValue[]>>
         {
-            ["Employees"] = intake.Employees.Select(e => new XLCellValue[] { e.Id, e.Name }),
+            ["Employees"] = intake.Employees.Select(e => new XLCellValue[]
+                { e.Id, e.Name, e.Rating, e.CompletionPercent }),
             ["Skills"] = intake.Skills.Select(s => new XLCellValue[] { s.EmployeeId, s.Skill }),
             ["Customers"] = intake.Customers.Select(c => new XLCellValue[] { c.Id, c.Name }),
             ["Tasks"] = intake.Jobs.Select(j => new XLCellValue[]
-                { j.Id, j.CustomerId, j.Description, j.Skill, j.Start, j.End, j.CrewSize }),
+                { j.Id, j.CustomerId, j.Description, j.Skill, j.Start, j.End, j.CrewSize, j.Priority }),
             ["CompletedWork"] = intake.CompletedWork.Select(w => new XLCellValue[] { w.EmployeeId, w.Skill }),
+            ["Scheduled"] = intake.Scheduled.Select(b => new XLCellValue[] { b.TaskId, b.EmployeeId, b.Start, b.End }),
         };
         foreach (var (name, headers) in Sheets)
         {
@@ -45,6 +48,8 @@ public static class Workbooks
             }
             if (name == "Tasks")
                 sheet.Columns(5, 6).Style.DateFormat.Format = "yyyy-mm-dd hh:mm";
+            if (name == "Scheduled")
+                sheet.Columns(3, 4).Style.DateFormat.Format = "yyyy-mm-dd hh:mm";
             sheet.Columns(1, headers.Length).Width = 18;
             if (name is "Employees" or "Customers")
                 sheet.Column(2).Width = 30;
@@ -68,17 +73,19 @@ public static class Workbooks
                     throw new FormatException($"{name}: column {i + 1} must be '{headers[i]}'.");
         }
 
-        var employees = Rows(workbook, "Employees", 2)
-            .Select(r => new Employee(Text(r, 1), Text(r, 2))).ToList();
+        var employees = Rows(workbook, "Employees", 4)
+            .Select(r => new Employee(Text(r, 1), Text(r, 2), IntIn(r, 3, 1, 5), Percent(r, 4))).ToList();
         var skills = Rows(workbook, "Skills", 2)
             .Select(r => new EmployeeSkill(Text(r, 1), Text(r, 2))).ToList();
         var customers = Rows(workbook, "Customers", 2)
             .Select(r => new Customer(Text(r, 1), Text(r, 2))).ToList();
-        var jobs = Rows(workbook, "Tasks", 7)
+        var jobs = Rows(workbook, "Tasks", 8)
             .Select(r => new Job(Text(r, 1), Text(r, 2), Text(r, 3), Text(r, 4),
-                Date(r, 5), Date(r, 6), PositiveInt(r, 7))).ToList();
+                Date(r, 5), Date(r, 6), PositiveInt(r, 7), IntIn(r, 8, 1, 5))).ToList();
         var completed = Rows(workbook, "CompletedWork", 2)
             .Select(r => new CompletedWork(Text(r, 1), Text(r, 2))).ToList();
+        var scheduled = Rows(workbook, "Scheduled", 4)
+            .Select(r => new ScheduledWork(Text(r, 1), Text(r, 2), Date(r, 3), Date(r, 4))).ToList();
 
         Unique(employees.Select(e => e.Id), "employee ID");
         Unique(customers.Select(c => c.Id), "customer ID");
@@ -100,7 +107,30 @@ public static class Workbooks
             if (job.End <= job.Start)
                 throw new FormatException($"Task '{job.Id}' must end after it starts.");
         }
-        return new Intake(employees, skills, customers, jobs, completed);
+        var jobsById = jobs.ToDictionary(j => j.Id, StringComparer.Ordinal);
+        var skillSet = skills.ToHashSet();
+        Unique(scheduled.Select(b => $"{b.TaskId}/{b.EmployeeId}"), "Scheduled task/employee pair");
+        foreach (var booking in scheduled)
+        {
+            var where = $"Scheduled task '{booking.TaskId}', employee '{booking.EmployeeId}'";
+            if (!jobsById.TryGetValue(booking.TaskId, out var job))
+                throw new FormatException($"{where}: unknown task.");
+            if (!employeeIds.Contains(booking.EmployeeId))
+                throw new FormatException($"{where}: unknown employee.");
+            if (!skillSet.Contains(new EmployeeSkill(booking.EmployeeId, job.Skill)))
+                throw new FormatException($"{where}: employee does not have skill '{job.Skill}'.");
+            if (booking.End <= booking.Start)
+                throw new FormatException($"{where}: must end after it starts.");
+        }
+        foreach (var bookings in scheduled.GroupBy(b => b.EmployeeId))
+        {
+            var ordered = bookings.OrderBy(b => b.Start).ToList();
+            for (var i = 1; i < ordered.Count; i++)
+                if (ordered[i].Start < ordered[i - 1].End)
+                    throw new FormatException($"Scheduled: employee '{bookings.Key}' is booked on tasks " +
+                        $"'{ordered[i - 1].TaskId}' and '{ordered[i].TaskId}' at overlapping times.");
+        }
+        return new Intake(employees, skills, customers, jobs, completed, scheduled);
     }
 
     public static void WriteSchedule(string path, Intake intake, IReadOnlyList<Assignment> assignments)
@@ -108,7 +138,7 @@ public static class Workbooks
         using var workbook = new XLWorkbook();
         var sheet = workbook.AddWorksheet("Schedule");
         string[] headers = ["TaskId", "CustomerId", "Customer", "Description", "Skill", "Start", "End",
-            "CrewSize", "Status", "EmployeeIds", "Employees"];
+            "CrewSize", "Priority", "Status", "EmployeeIds", "Employees"];
         for (var i = 0; i < headers.Length; i++)
             sheet.Cell(1, i + 1).Value = headers[i];
         sheet.Row(1).Style.Font.Bold = true;
@@ -125,9 +155,10 @@ public static class Workbooks
             row.Cell(6).Value = job.Start;
             row.Cell(7).Value = job.End;
             row.Cell(8).Value = job.CrewSize;
-            row.Cell(9).Value = crew.Count == 0 ? "Unscheduled" : "Scheduled";
-            row.Cell(10).Value = string.Join(", ", crew.Select(e => e.Id));
-            row.Cell(11).Value = string.Join(", ", crew.Select(e => e.Name));
+            row.Cell(9).Value = job.Priority;
+            row.Cell(10).Value = crew.Count == 0 ? "Unscheduled" : "Scheduled";
+            row.Cell(11).Value = string.Join(", ", crew.Select(e => e.Id));
+            row.Cell(12).Value = string.Join(", ", crew.Select(e => e.Name));
         }
         sheet.Columns(6, 7).Style.DateFormat.Format = "yyyy-mm-dd hh:mm:ss.000";
         workbook.SaveAs(path);
@@ -178,6 +209,35 @@ public static class Workbooks
         if (!int.TryParse(value, NumberStyles.None, CultureInfo.InvariantCulture, out var number) || number < 1)
             throw Error(row.Cell(column), "must be a positive whole number");
         return number;
+    }
+
+    private static int IntIn(IXLRow row, int column, int min, int max)
+    {
+        var value = Text(row, column);
+        if (!int.TryParse(value, NumberStyles.None, CultureInfo.InvariantCulture, out var number) ||
+            number < min || number > max)
+            throw Error(row.Cell(column), $"must be a whole number from {min} to {max}");
+        return number;
+    }
+
+    /// <summary>0–100. A cell formatted as a percentage in Excel (e.g. 92% stored as 0.92) is scaled to 0–100.</summary>
+    private static decimal Percent(IXLRow row, int column)
+    {
+        var cell = row.Cell(column);
+        var text = Text(row, column);
+        decimal value;
+        if (cell.DataType == XLDataType.Number)
+        {
+            value = (decimal)cell.GetDouble();
+            if (cell.Style.NumberFormat.Format.Contains('%') || cell.Style.NumberFormat.NumberFormatId is 9 or 10)
+                value *= 100;
+        }
+        else if (!decimal.TryParse(text.TrimEnd('%').Trim(), NumberStyles.Number, CultureInfo.InvariantCulture, out value))
+            throw Error(cell, "must be a number from 0 to 100");
+        value = Math.Round(value, 2);
+        if (value is < 0 or > 100)
+            throw Error(cell, "must be a number from 0 to 100");
+        return value;
     }
 
     private static FormatException Error(IXLCell cell, string message) =>

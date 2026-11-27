@@ -29,7 +29,7 @@ services:
     volumes:
       - ./examples:/input:ro
       - ./output:/output
-    command: ["/input/example.xlsx", "/output/schedule.xlsx"]
+    command: ["/input/mock_data.xlsx", "/output/schedule.xlsx"]
     profiles: ["scheduler"]
 
 volumes:
